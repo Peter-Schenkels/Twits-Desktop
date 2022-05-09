@@ -5,19 +5,32 @@
     using System.Management.Automation;
     using Newtonsoft.Json.Linq;
     using System.Collections.Generic;
+    using System.Threading;
+    using Microsoft.Toolkit.Uwp.Notifications;
+    using Newtonsoft.Json;
+
     public partial class MainWindow : AdonisWindow
     {
         internal LoginWindow loginWindow;
 
         internal PowerShell pipeline;
+        internal PowerShell ThreadPipelineOne;
+        internal PowerShell ThreadPipelineTwo;
 
         internal string username = "";
         internal string userId = "";
         internal List<FollowedTwitchUser> followedUsers;
+        internal Timer checkNewFollowedTimer;
+        internal Timer checkNewLiveStreamersTimer;
+
+        int FOLLOW_TIMER_MS = 10000;
+        int LIVESTREAMER_TIMER_MS = 10000;
 
         public MainWindow()
         {
             pipeline = PowerShell.Create();
+            ThreadPipelineOne = PowerShell.Create();
+            ThreadPipelineTwo = PowerShell.Create();
             loginWindow = new LoginWindow();
             InitializeComponent();
         }
@@ -51,12 +64,18 @@
 
         private List<FollowedTwitchUser> FetchFollowedUsers(string userId)
         {
-            pipeline.AddScript("twitch api get users/follows -q from_id=" + userId);
-            JObject jsonResults = JObject.Parse(InvokationToString(pipeline.Invoke()));
+            ThreadPipelineOne.AddScript("twitch api get users/follows -q from_id=" + userId);
+            JObject jsonResults = JObject.Parse(InvokationToString(ThreadPipelineOne.Invoke()));
             List<FollowedTwitchUser> followedUsers = new List<FollowedTwitchUser>();
             foreach( var user in jsonResults["data"] )
             {
-                followedUsers.Add(new FollowedTwitchUser((string)user["to_name"], (string)user["to_id"]));
+                ThreadPipelineOne.AddScript("twitch api get users -q login=" + (string)user["to_name"]);
+                string result = InvokationToString(ThreadPipelineOne.Invoke());
+                if (result != "{  \"data\": []}")
+                {
+                    Uri profilePictureUri = new Uri((string)JObject.Parse(result)["data"].First["profile_image_url"], UriKind.Absolute);
+                    followedUsers.Add(new FollowedTwitchUser((string)user["to_name"], (string)user["to_id"], profilePictureUri));
+                }  
             }
             return followedUsers;
         }
@@ -70,6 +89,30 @@
                 //TODO: Add something to test if secret/client ID were valid.
                 Console.WriteLine("Twitch API logged on");
             }
+        }
+
+        private void CheckNewFollowedUserCallback(object state)
+        {
+            followedUsers = FetchFollowedUsers(userId);
+            checkNewFollowedTimer.Change(FOLLOW_TIMER_MS, 0);
+        }
+
+        private void CheckLiveStreamersCallback(object state)
+        {
+            foreach (FollowedTwitchUser streamer in followedUsers)
+            {
+                ThreadPipelineTwo.AddScript("twitch api get streams -q user_login=" + streamer.name);
+                JObject result = JObject.Parse(InvokationToString(ThreadPipelineTwo.Invoke()));
+                if(result.Count > 2)
+                {
+                    var streamerStatus = JsonConvert.DeserializeObject<dynamic>(result.First.ToString());
+                    if (streamerStatus.live)
+                    {
+                        new ToastContentBuilder().AddInlineImage(streamer.picture).AddText(streamer.name + " is live!", AdaptiveTextStyle.Title).AddText(streamerStatus.title).Show();
+                    }
+                }
+            }
+            checkNewLiveStreamersTimer.Change(LIVESTREAMER_TIMER_MS, 0);
         }
 
         private void OnInitialized(object sender, EventArgs args)
@@ -88,7 +131,14 @@
                 TwitchApiStart();
                 userId = FetchUserId(username);
                 followedUsers = FetchFollowedUsers(userId);
+                checkNewFollowedTimer = new Timer(CheckNewFollowedUserCallback, null, FOLLOW_TIMER_MS, 0);
+                checkNewLiveStreamersTimer = new Timer(CheckLiveStreamersCallback, null, LIVESTREAMER_TIMER_MS, 1000);
             }
+        }
+
+        private void CheckNewFollowed(object state)
+        {
+            
         }
 
         private void CheckLiveStreams()
