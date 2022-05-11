@@ -25,17 +25,11 @@ namespace Twits
         public LoginWindow()
         {
             InitializeComponent();
-            ToastNotificationManagerCompat.OnActivated += ToastNotificationManagerCompat_OnActivated;
-        }
-
-        private void ToastNotificationManagerCompat_OnActivated(ToastNotificationActivatedEventArgsCompat e)
-        {
-            throw new NotImplementedException();
         }
 
         private void loginButton_Click(object sender, RoutedEventArgs e)
         {
-            new ToastContentBuilder().AddText("Sukkel is live", AdaptiveTextStyle.Title).Show();
+            this.Close();
         }
     }
 }
