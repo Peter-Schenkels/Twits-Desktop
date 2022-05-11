@@ -11,7 +11,7 @@ namespace Twits
         public const string key = "";
     }
     
-    class client
+    class Client
     {
         public const string key = "";   
     }
