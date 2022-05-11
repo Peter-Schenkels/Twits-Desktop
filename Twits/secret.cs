@@ -10,4 +10,9 @@ namespace Twits
     {
         public const string key = "";
     }
+    
+    class client
+    {
+        public const string key = "";   
+    }
 }
