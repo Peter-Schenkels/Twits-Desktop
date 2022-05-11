@@ -8,6 +8,7 @@
     using System.Threading;
     using Microsoft.Toolkit.Uwp.Notifications;
     using Newtonsoft.Json;
+    using TwitchLib.Api.Helix;
 
     public partial class MainWindow : AdonisWindow
     {
@@ -16,6 +17,8 @@
         internal PowerShell pipeline;
         internal PowerShell ThreadPipelineOne;
         internal PowerShell ThreadPipelineTwo;
+
+        private Helix API;
 
         internal string username = "";
         internal string userId = "";
@@ -29,8 +32,9 @@
         public MainWindow()
         {
             pipeline = PowerShell.Create();
-            ThreadPipelineOne = PowerShell.Create();
-            ThreadPipelineTwo = PowerShell.Create();
+            API = new Helix();
+            API.Settings.ClientId = "4v8e9ixyim5umwx12a3nr25o3r0wcx";
+
             loginWindow = new LoginWindow();
             InitializeComponent();
         }
@@ -64,6 +68,7 @@
 
         private List<FollowedTwitchUser> FetchFollowedUsers(string userId)
         {
+            var ThreadPipelineOne = PowerShell.Create();
             ThreadPipelineOne.AddScript("twitch api get users/follows -q from_id=" + userId);
             JObject jsonResults = JObject.Parse(InvokationToString(ThreadPipelineOne.Invoke()));
             List<FollowedTwitchUser> followedUsers = new List<FollowedTwitchUser>();
@@ -71,7 +76,7 @@
             {
                 ThreadPipelineOne.AddScript("twitch api get users -q login=" + (string)user["to_name"]);
                 string result = InvokationToString(ThreadPipelineOne.Invoke());
-                if (result != "{  \"data\": []}")
+                if (result != "{  \"data\": []}" || result != "{  \"data\": [],  \"error\": \"Not Found\",  \"status\": 404}")
                 {
                     Uri profilePictureUri = new Uri((string)JObject.Parse(result)["data"].First["profile_image_url"], UriKind.Absolute);
                     followedUsers.Add(new FollowedTwitchUser((string)user["to_name"], (string)user["to_id"], profilePictureUri));
@@ -93,12 +98,14 @@
 
         private void CheckNewFollowedUserCallback(object state)
         {
+
             followedUsers = FetchFollowedUsers(userId);
             checkNewFollowedTimer.Change(FOLLOW_TIMER_MS, 0);
         }
 
         private void CheckLiveStreamersCallback(object state)
         {
+            var ThreadPipelineTwo = PowerShell.Create();
             foreach (FollowedTwitchUser streamer in followedUsers)
             {
                 ThreadPipelineTwo.AddScript("twitch api get streams -q user_login=" + streamer.name);
