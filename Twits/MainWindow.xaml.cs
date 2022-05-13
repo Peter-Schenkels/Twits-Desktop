@@ -6,16 +6,17 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.IO;
     using System.Linq;
     using System.Management.Automation;
+    using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
     using TwitchLib.Api;
 
+
     public partial class MainWindow : AdonisWindow
     {
-
-        internal LoginWindow loginWindow;
         private TwitchLib.Api.TwitchAPI API;
         private string username = "";
         private string userId = "";
@@ -27,36 +28,50 @@
             API = new TwitchLib.Api.TwitchAPI();
             API.Settings.ClientId = TwitchAPI.Client.key;
             API.Settings.Secret = TwitchAPI.Secret.key;
-            loginWindow = new LoginWindow();
             InitializeComponent();
         }
 
-        private void GetLoginCredentials()
-        {
-            loginWindow.ShowDialog();
-            username = loginWindow.UsernameInput.Text;
-        }
-
         private void OnInitialized(object sender, EventArgs args)
+        { 
+            _ = UpdateTwitchUserState();  
+        }
+        private async Task<bool> RetreiveUsername()
         {
-            GetLoginCredentials();
-            if (username == "")
+            string returnName = "";
+            try
             {
-                AdonisUI.Controls.MessageBox.Show("Can't show notifications if no username is given");
+                await Dispatcher.Invoke(async () =>
+                {
+                    if (wvc.IsInitialized)
+                    {
+                        string res = await wvc.ExecuteScriptAsync("cookies.login");
+                        Debug.WriteLine("cookies.login = " + res);
+                        if (res != "null")
+                        {
+                            returnName = JToken.Parse(res).Value<string>();
+                            this.username = returnName;
+                        }                          
+                    }
+                });
+                return returnName != "";
             }
-            else
+            catch (Exception ex)
             {
-                _ = UpdateTwitchUserState();
+                Debug.WriteLine("Error inside your async code!");
+                return false;
             }
+            
         }
 
         private async Task UpdateTwitchUserState()
         {
-            if (this.username == "") return;
+            while(!await Task.Run(RetreiveUsername))
+            {
+                await Task.Delay(100);
+            }
             var users = await API.Helix.Users.GetUsersAsync(logins: new List<string> { this.username });
             this.userId = users.Users[0].Id;
             DateTime lastCheck = new DateTime();
-
             while(true)
             { 
                 var usersFollows = await API.Helix.Users.GetUsersFollowsAsync(fromId: this.userId);
@@ -65,14 +80,22 @@
                     .ToList();
                 var streams = await API.Helix.Streams.GetStreamsAsync(userIds: this.followedUsers.Select(x => x.id).ToList());
                 List<FollowedTwitchUser> checkedUsers = this.followedUsers.ToList();
+
                 foreach (var streamer in streams.Streams)
                 {
                     if (lastCheck < streamer.StartedAt)
                     {
+                        string thumbnailPath = Path.Combine(Path.GetTempPath(), "twits - thumbnail.png");
+                        using (WebClient webClient = new WebClient())
+                        {
+                            webClient.DownloadFile(streamer.ThumbnailUrl.Replace("{width}", "300").Replace("{height}", "200"), thumbnailPath);
+                        }
+
+                        Path.Combine(Path.GetTempPath(), "twits-thumbnail.png");
                         new ToastContentBuilder()
-                            .AddInlineImage(new Uri(streamer.ThumbnailUrl, UriKind.Absolute))
                             .AddText(streamer.UserName + " is live!", AdaptiveTextStyle.Title)
-                            .AddText(streamer.Title).Show();
+                            .AddText(streamer.Title)
+                            .AddInlineImage(new Uri(thumbnailPath)).Show();
                     }
                 }
                 lastCheck = DateTime.UtcNow;
