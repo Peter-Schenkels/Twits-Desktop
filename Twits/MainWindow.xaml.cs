@@ -29,11 +29,13 @@
             API.Settings.ClientId = TwitchAPI.Client.key;
             API.Settings.Secret = TwitchAPI.Secret.key;
             InitializeComponent();
+
         }
 
         private void OnInitialized(object sender, EventArgs args)
         { 
-            _ = UpdateTwitchUserState();  
+            _ = UpdateTwitchUserState();
+
         }
         private async Task<bool> RetreiveUsername()
         {
@@ -45,7 +47,6 @@
                     if (wvc.IsInitialized)
                     {
                         string res = await wvc.ExecuteScriptAsync("cookies.login");
-                        Debug.WriteLine("cookies.login = " + res);
                         if (res != "null")
                         {
                             returnName = JToken.Parse(res).Value<string>();
@@ -57,10 +58,8 @@
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Error inside your async code!");
                 return false;
             }
-            
         }
 
         private async Task UpdateTwitchUserState()
@@ -101,6 +100,30 @@
                 lastCheck = DateTime.UtcNow;
                 await Task.Delay(UPDATE_TIMER_MS);
             }
+        }
+
+        private async Task InitWebview()
+        {
+            await wvc.EnsureCoreWebView2Async();
+            wvc.CoreWebView2.ContainsFullScreenElementChanged += (obj, args) =>
+            {
+                if (wvc.CoreWebView2.ContainsFullScreenElement)
+                {
+                    this.WindowStyle = System.Windows.WindowStyle.None;
+                    this.WindowState = System.Windows.WindowState.Maximized;
+                    this.Activate();
+                }
+                else
+                {
+                    this.WindowStyle = System.Windows.WindowStyle.SingleBorderWindow;
+                    this.WindowState = System.Windows.WindowState.Normal;
+                }
+            };     
+        }
+
+        private void AdonisWindow_Loaded(object sender, System.Windows.RoutedEventArgs e)
+        {
+            _ = InitWebview();
         }
     }
 }
