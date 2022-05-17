@@ -8,7 +8,7 @@
         xmlns:adonisControls="clr-namespace:AdonisUI.Controls;assembly=AdonisUI"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800"
+        Title="Twits" Height="450" Width="800"
         WindowState="Maximized"
         Initialized="OnInitialized"
         Loaded="AdonisWindow_Loaded">

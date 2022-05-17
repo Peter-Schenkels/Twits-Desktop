@@ -3,6 +3,7 @@
     using AdonisUI.Controls;
     using Microsoft.Toolkit.Uwp.Notifications;
     using Newtonsoft.Json.Linq;
+    using Serilog;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
@@ -25,18 +26,23 @@
 
         public MainWindow()
         {
+            var loggerConfig = new LoggerConfiguration()
+                .MinimumLevel.Verbose()
+                .WriteTo.Debug()
+                .WriteTo.File("loggertje.log");
+            Log.Logger = loggerConfig.CreateLogger();
+
             API = new TwitchLib.Api.TwitchAPI();
             API.Settings.ClientId = TwitchAPI.Client.key;
             API.Settings.Secret = TwitchAPI.Secret.key;
             InitializeComponent();
-
         }
 
         private void OnInitialized(object sender, EventArgs args)
         { 
             _ = UpdateTwitchUserState();
-
         }
+
         private async Task<bool> RetreiveUsername()
         {
             string returnName = "";
@@ -84,6 +90,8 @@
                 {
                     if (lastCheck < streamer.StartedAt)
                     {
+                        Log.Information($"Sending notification for streamer {streamer.UserName} because {lastCheck} < {streamer.StartedAt}");
+
                         string thumbnailPath = Path.Combine(Path.GetTempPath(), "twits - thumbnail.png");
                         using (WebClient webClient = new WebClient())
                         {
@@ -95,6 +103,10 @@
                             .AddText(streamer.UserName + " is live!", AdaptiveTextStyle.Title)
                             .AddText(streamer.Title)
                             .AddInlineImage(new Uri(thumbnailPath)).Show();
+                    }
+                    else
+                    {
+                        Log.Information($"Not sending notification for streamer {streamer.UserName} because {lastCheck} < {streamer.StartedAt}");
                     }
                 }
                 lastCheck = DateTime.UtcNow;
